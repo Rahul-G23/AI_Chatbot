@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - ExamVerse AI</title>
+    <link rel="stylesheet" href="/styles/main.css">
+    <link rel="stylesheet" href="/styles/dashboard.css">
+    <!-- Chart.js removed -->
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>ExamVerse AI</h2>
+            </div>
+            <nav class="sidebar-menu">
+                <a href="#dashboard" class="menu-item active">📊 Dashboard</a>
+                <a href="#chatbot" class="menu-item">🤖 AI Chatbot</a>
+                <a href="#syllabus" class="menu-item">📚 Syllabus</a>
+                <!-- Mock Tests link removed -->
+                <a href="#notes" class="menu-item">📓 Notes</a>
+                <a href="#profile" class="menu-item">👤 Profile</a>
+                <a href="#" class="menu-item" id="logoutBtn">🚪 Logout</a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="dashboard-content">
+            <!-- Dashboard Section -->
+            <section id="dashboard" class="content-section">
+                <div class="header">
+                    <h1>Dashboard</h1>
+                    <div class="header-right">
+                        <button class="btn-theme" id="themeToggle">🌙 Dark Mode</button>
+                    </div>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">🔥</div>
+                        <div class="stat-info">
+                            <h3>Study Streak</h3>
+                            <p id="streakDays">0 days</p>
+                        </div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-icon">⏱️</div>
+                        <div class="stat-info">
+                            <h3>Study Time</h3>
+                            <p id="studyTime">0 hours</p>
+                        </div>
+                    </div>
+
+                    <!-- Quizzes Taken and Avg Score removed per request -->
+                </div>
+
+                <!-- Charts removed -->
+            </section>
+
+            <!-- Chatbot Section -->
+            <section id="chatbot" class="content-section" style="display: none;">
+                <h1>AI Exam Chatbot</h1>
+                <div class="chatbot-container">
+                    <div class="chat-box" id="chatBox">
+                        <div class="chat-message ai-message">
+                            <p>Hi! I'm your ExamVerse AI Assistant. Ask me anything and I’ll answer step by step.</p>
+                        </div>
+                    </div>
+                    <div class="chat-input-area">
+                        <div class="input-group">
+                            <input type="text" id="chatInput" placeholder="Ask your question...">
+                            <button id="sendBtn" class="btn btn-primary">Send</button>
+                            <button id="newChatBtn" class="btn btn-secondary" type="button">New Chat</button>
+                            <button id="voiceBtn" class="btn">🎤</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Syllabus Section -->
+            <section id="syllabus" class="content-section" style="display: none;">
+                <h1>Exam Syllabuses</h1>
+                <div class="syllabus-container">
+                    <div class="filter-bar">
+                        <select id="examFilter" class="form-control">
+                            <option value="">All Exams</option>
+                            <option value="NEET">NEET</option>
+                            <option value="JEE Main">JEE Main</option>
+                            <option value="JEE Advanced">JEE Advanced</option>
+                            <option value="UPSC">UPSC</option>
+                            <option value="Banking">Banking</option>
+                            <option value="SSC">SSC</option>
+                            <option value="Railway">Railway</option>
+                            <option value="CAT">CAT</option>
+                            <option value="GATE">GATE</option>
+                            <option value="CUET">CUET</option>
+                            <option value="NDA">NDA</option>
+                            <option value="CLAT">CLAT</option>
+                        </select>
+                        <input type="text" id="syllabusSearch" placeholder="Search syllabus..." class="form-control">
+                    </div>
+                    <div id="syllabusContent" class="content-grid"></div>
+                </div>
+            </section>
+
+            <!-- Quiz Section removed per request -->
+
+            <!-- Mock Tests removed from UI -->
+
+            <!-- Countdown Section -->
+            <section id="countdown" class="content-section" style="display: none;">
+                <h1>Exam Countdown</h1>
+                <div id="countdownContent" class="content-grid"></div>
+            </section>
+
+            <!-- Notes Section -->
+            <section id="notes" class="content-section" style="display: none;">
+                <h1>My Notes</h1>
+                <button class="btn btn-primary" id="newNoteBtn">+ New Note</button>
+                <div id="notesContent" class="content-grid"></div>
+            </section>
+
+            <!-- Profile Section -->
+            <section id="profile" class="content-section" style="display: none;">
+                <h1>My Profile</h1>
+                <div class="profile-card">
+                    <form id="profileForm">
+                        <div class="form-group">
+                            <label>Name</label>
+                            <input type="text" id="profileName" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input type="email" id="profileEmail" disabled>
+                        </div>
+                        <div class="form-group">
+                            <label>Target Exam</label>
+                            <select id="profileExam">
+                                <option value="">Select Exam</option>
+                                <option value="NEET">NEET</option>
+                                <option value="JEE Main">JEE Main</option>
+                                <option value="JEE Advanced">JEE Advanced</option>
+                                <option value="UPSC">UPSC</option>
+                                <option value="Banking">Banking</option>
+                                <option value="SSC">SSC</option>
+                                <option value="Railway">Railway</option>
+                                <option value="CAT">CAT</option>
+                                <option value="GATE">GATE</option>
+                                <option value="CUET">CUET</option>
+                                <option value="NDA">NDA</option>
+                                <option value="CLAT">CLAT</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Save Changes</button>
+                    </form>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="/scripts/api.js?v=20260527"></script>
+    <script src="/scripts/auth.js?v=20260527"></script>
+    <script src="/scripts/dashboard.js?v=20260527"></script>
+</body>
+</html>

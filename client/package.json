@@ -1,0 +1,12 @@
+{
+  "name": "examverse-ai-frontend",
+  "version": "1.0.0",
+  "description": "AI-powered Indian competitive exam preparation platform frontend",
+  "scripts": {
+    "dev": "npx http-server -p 3000",
+    "build": "echo 'Frontend is static HTML/CSS/JS - no build needed'"
+  },
+  "keywords": ["examverse", "ai", "competitive exams"],
+  "author": "ExamVerse Team",
+  "license": "MIT"
+}

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register - ExamVerse AI</title>
+    <link rel="stylesheet" href="/styles/main.css">
+    <link rel="stylesheet" href="/styles/auth.css">
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-card">
+            <h1>ExamVerse AI</h1>
+            <h2>Create Your Account</h2>
+            
+            <form id="registerForm">
+                <div class="form-group">
+                    <label for="name">Full Name</label>
+                    <input type="text" id="name" name="name" required placeholder="Enter your full name">
+                </div>
+
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" name="email" required placeholder="Enter your email">
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" required placeholder="Enter your password (min 6 characters)">
+                </div>
+
+                <div class="form-group">
+                    <label for="exam">Target Exam</label>
+                    <select id="exam" name="exam">
+                        <option value="">Select your target exam</option>
+                        <option value="NEET">NEET</option>
+                        <option value="JEE Main">JEE Main</option>
+                        <option value="JEE Advanced">JEE Advanced</option>
+                        <option value="UPSC">UPSC</option>
+                        <option value="KCET/KPSE">KCET/KPSE</option>
+                        <option value="Banking">Banking</option>
+                        <option value="SSC">SSC</option>
+                        <option value="Railway">Railway</option>
+                        <option value="CAT">CAT</option>
+                        <option value="GATE">GATE</option>
+                        <option value="CUET">CUET</option>
+                        <option value="NDA">NDA</option>
+                        <option value="CLAT">CLAT</option>
+                    </select>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-block">Register</button>
+
+                <p class="form-switch">
+                    Already have an account? <a href="/login">Login here</a>
+                </p>
+            </form>
+
+            <div id="errorMessage" class="error-message" style="display: none;"></div>
+            <div id="successMessage" class="success-message" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script src="/scripts/api.js"></script>
+    <script src="/scripts/auth.js"></script>
+    <script>
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const name = document.getElementById('name').value;
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const targetExam = document.getElementById('exam').value || null;
+            
+            try {
+                const response = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ name, email, password, targetExam })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('user', JSON.stringify(data.user));
+                    document.getElementById('successMessage').textContent = 'Registration successful! Redirecting...';
+                    document.getElementById('successMessage').style.display = 'block';
+                    setTimeout(() => window.location.href = '/dashboard', 1500);
+                } else {
+                    showError(data.message);
+                }
+            } catch (error) {
+                showError('An error occurred. Please try again.');
+            }
+        });
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => errorDiv.style.display = 'none', 5000);
+        }
+    </script>
+</body>
+</html>
