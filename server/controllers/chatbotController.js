@@ -1,6 +1,6 @@
 // Chatbot Controller
 const ChatHistory = require('../models/ChatHistory');
-const { generateAIResponse } = require('../services/aiService');
+const { generateAIResponse, getActiveProvider } = require('../services/aiService');
 const Syllabus = require('../models/Syllabus');
 
 // Send message to chatbot
@@ -21,39 +21,45 @@ exports.sendMessage = async (req, res) => {
     // Generate AI response
     const aiResponse = await generateAIResponse(message, resolvedExamName, context);
 
-    // Save to chat history
-    let chatSession;
-    if (sessionId) {
-      chatSession = await ChatHistory.findById(sessionId);
-    } else {
-      chatSession = new ChatHistory({
-        userId,
-        examName: resolvedExamName,
-        sessionTitle: message.substring(0, 50)
+    // Save to chat history only if authenticated (userId present)
+    if (userId) {
+      let chatSession;
+      if (sessionId) {
+        chatSession = await ChatHistory.findById(sessionId);
+      } else {
+        chatSession = new ChatHistory({
+          userId,
+          examName: resolvedExamName,
+          sessionTitle: message.substring(0, 50)
+        });
+      }
+
+      chatSession.messages.push({
+        type: 'user',
+        content: message,
+        timestamp: new Date()
+      });
+
+      chatSession.messages.push({
+        type: 'ai',
+        content: aiResponse,
+        timestamp: new Date()
+      });
+
+      await chatSession.save();
+
+      return res.json({
+        success: true,
+        sessionId: chatSession._id,
+        response: aiResponse,
+        reply: aiResponse,
+        provider: getActiveProvider(),
+        message: 'Response generated successfully'
       });
     }
 
-    chatSession.messages.push({
-      type: 'user',
-      content: message,
-      timestamp: new Date()
-    });
-
-    chatSession.messages.push({
-      type: 'ai',
-      content: aiResponse,
-      timestamp: new Date()
-    });
-
-    await chatSession.save();
-
-    res.json({
-      success: true,
-      sessionId: chatSession._id,
-      response: aiResponse,
-      reply: aiResponse,
-      message: 'Response generated successfully'
-    });
+    // For unauthenticated/test calls, return AI response without persisting
+    return res.json({ success: true, response: aiResponse, reply: aiResponse, provider: getActiveProvider(), message: 'Response generated (not persisted)'});
   } catch (error) {
     res.status(500).json({ success: false, message: 'Failed to process message', error: error.message });
   }

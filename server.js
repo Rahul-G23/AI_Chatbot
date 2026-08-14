@@ -62,6 +62,9 @@ app.get('/register', (req, res) => {
 // Clean alias for chat clients that expect POST /api/chat
 app.post('/api/chat', auth, aiLimiter, chatbotController.sendMessage);
 
+// Unauthenticated test endpoint for debugging
+app.post('/api/test-chat', chatbotController.sendMessage);
+
 // Fallback: try to serve the requested file from client folder, otherwise
 // return 404 for API routes or send index.html for frontend routes (SPA-friendly)
 app.use((req, res) => {

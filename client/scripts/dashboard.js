@@ -226,6 +226,37 @@ function setupChatbot() {
     if (newChatBtn) {
         newChatBtn.addEventListener('click', resetChatHistory);
     }
+
+    updateProviderBadge('unknown');
+}
+
+function updateProviderBadge(provider) {
+    const badge = document.getElementById('chatProviderBadge');
+    if (!badge) return;
+
+    const value = (provider || 'unknown').toLowerCase();
+    badge.classList.remove('provider-gemini', 'provider-huggingface', 'provider-offline', 'provider-unknown');
+
+    if (value === 'gemini') {
+        badge.classList.add('provider-gemini');
+        badge.textContent = 'Provider: Gemini (Live)';
+        return;
+    }
+
+    if (value === 'huggingface') {
+        badge.classList.add('provider-huggingface');
+        badge.textContent = 'Provider: Hugging Face (Live)';
+        return;
+    }
+
+    if (value === 'offline') {
+        badge.classList.add('provider-offline');
+        badge.textContent = 'Provider: Offline Fallback';
+        return;
+    }
+
+    badge.classList.add('provider-unknown');
+    badge.textContent = 'Provider: Unknown';
 }
 
 async function sendChatMessage() {
@@ -243,18 +274,26 @@ async function sendChatMessage() {
     isSendingMessage = true;
 
     try {
+        // Clear any previously stored chat history so responses come from live AI
+        chatHistory = [];
+        try { sessionStorage.removeItem(CHAT_HISTORY_STORAGE_KEY); } catch (e) {}
+        const chatBox = document.getElementById('chatBox');
+        if (chatBox) chatBox.innerHTML = '';
+
         // Add user message to chat
         addChatMessage(userMessage, 'user');
         chatInput.value = '';
         showTypingIndicator();
 
-        // Get AI response
-        const response = await apiCall('/chat', 'POST', {
+        // Choose endpoint: authenticated users use /api/chat, anonymous use /api/test-chat
+        const endpoint = getToken() ? '/chat' : '/test-chat';
+        const response = await apiCall(endpoint, 'POST', {
             message: userMessage
         });
 
         if (response.success) {
             const botResponse = response.reply || response.response || response.message || 'No response returned.';
+            updateProviderBadge(response.provider || 'unknown');
             addChatMessage(botResponse, 'ai');
             
             // Speak response (optional)

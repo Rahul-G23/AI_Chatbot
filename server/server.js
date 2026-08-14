@@ -1,9 +1,10 @@
 // ExamVerse AI - Backend Server
+const path = require('path');
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const bodyParser = require('body-parser');
-require('dotenv').config();
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const auth = require('./middleware/auth');
 const { aiLimiter } = require('./middleware/rateLimiter');
 const chatbotController = require('./controllers/chatbotController');
@@ -40,6 +41,12 @@ app.use('/api/notes', require('./routes/notes'));
 
 // Alias for clients expecting POST /api/chat
 app.post('/api/chat', auth, aiLimiter, chatbotController.sendMessage);
+
+// Unauthenticated test endpoint for debugging (remove in production)
+app.post('/api/test-chat', chatbotController.sendMessage);
+
+// Simple ping for routing checks
+app.get('/api/ping', (req, res) => res.json({ ok: true, now: Date.now() }));
 
 // Health Check
 app.get('/api/health', (req, res) => {

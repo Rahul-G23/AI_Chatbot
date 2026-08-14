@@ -1,6 +1,7 @@
 // Database Seeding Script for ExamVerse AI
+const path = require('path');
 const mongoose = require('mongoose');
-require('dotenv').config();
+require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
 
 const Exam = require('../models/Exam');
 const Syllabus = require('../models/Syllabus');

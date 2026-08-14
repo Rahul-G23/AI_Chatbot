@@ -3,6 +3,13 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const axios = require('axios');
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+let activeProvider = 'offline';
+
+const setActiveProvider = (provider) => {
+  activeProvider = provider;
+};
+
+const getActiveProvider = () => activeProvider;
 
 // Exam-specific system prompts
 const systemPrompts = {
@@ -113,6 +120,27 @@ const extractTopic = (message) => {
   return cleaned.replace(/[?!.]+$/g, '').trim() || 'this topic';
 };
 
+// Normalize topic for presentation: title case, common possessives, and small cleanup
+const normalizeTopicForPresentation = (topic) => {
+  if (!topic) return 'This topic';
+  let t = String(topic).trim();
+  // common normalization: "newtons laws" -> "Newton's laws"
+  t = t.replace(/\bnewtons\b/i, "Newton's");
+  // collapse extra whitespace and fix capitalization (title case for short topics)
+  t = t.replace(/\s+/g, ' ');
+  // If it's multiple words, capitalize first letter of each (but keep small words lowercase except first)
+  const words = t.split(' ');
+  if (words.length <= 4) {
+    t = words.map((w, i) => {
+      if (i > 0 && /^(and|or|of|in|the|a|an|to)$/.test(w.toLowerCase())) return w.toLowerCase();
+      return w.charAt(0).toUpperCase() + w.slice(1);
+    }).join(' ');
+  } else {
+    t = t.charAt(0).toUpperCase() + t.slice(1);
+  }
+  return t;
+};
+
 const buildMathResponse = (userMessage) => {
   const exprCandidate = extractExpression(userMessage);
   const value = exprCandidate ? safeEval(exprCandidate) : null;
@@ -125,26 +153,42 @@ const buildMathResponse = (userMessage) => {
 };
 
 const buildDefinitionResponse = (topic, examName, context) => {
-  const normalizedTopic = topic.toLowerCase();
+  const presentedTopic = normalizeTopicForPresentation(topic);
+  const key = presentedTopic.toLowerCase();
+
   const library = {
     physics: 'Physics is the branch of science that studies matter, energy, force, motion, and the laws governing them.',
     chemistry: 'Chemistry is the study of substances, their composition, structure, properties, and the changes they undergo.',
     biology: 'Biology is the study of living organisms, their structure, function, growth, evolution, and interactions.',
-    'newton\'s laws': 'Newton\'s laws describe inertia, force and acceleration, and action-reaction pairs that govern motion.',
+    "newton's laws": "Newton's laws describe inertia, force and acceleration, and action-reaction pairs that govern motion.",
     inertia: 'Inertia is the tendency of an object to resist changes in its state of rest or motion.',
     force: 'Force is a push or pull that can change the motion of an object or deform it.',
     motion: 'Motion is the change in position of an object with time relative to a reference point.'
   };
 
-  const fact = library[normalizedTopic] || `${topic} is an important concept in ${examName} preparation.`;
-  const contextLine = context ? `Relevant syllabus context: ${context}.` : `This topic is commonly tested in ${examName}.`;
+  const fact = library[key] || `${presentedTopic} is an important concept in ${examName || 'General'} preparation.`;
+  const contextLine = context ? `Relevant syllabus context: ${context}.` : `This topic is commonly tested in ${examName || 'General'}.`;
 
-  return `1) ${fact}\n2) ${contextLine}\n3) If you want, I can also give a one-line exam-focused example or a deeper explanation.`;
+  // Return a concise, well-formed paragraph rather than numbered steps for simple definitions
+  return `${presentedTopic}: ${fact} ${contextLine} If you want, I can provide a short example or a deeper explanation.`;
 };
 
 const buildExplainResponse = (topic, examName, context) => {
-  const contextLine = context ? `Use this syllabus context while studying: ${context}.` : `Focus this topic within the ${examName} syllabus.`;
-  return `1) Topic: ${topic}\n2) Main idea: Break it into definition, core formula or concept, and an example\n3) ${contextLine}`;
+  const presentedTopic = normalizeTopicForPresentation(topic);
+  const contextLine = context ? `Relevant syllabus context: ${context}.` : `Focus this topic within the ${examName || 'General'} syllabus.`;
+
+  const definition = (() => {
+    const key = presentedTopic.toLowerCase();
+    if (key === "newton's laws" || key.includes('newton')) {
+      return "Newton's laws describe inertia, the relation between force and acceleration (F = ma), and action-reaction pairs that govern motion.";
+    }
+    return `${presentedTopic} is an important concept; start from its definition, then cover main formulas or principles, and finish with an example.`;
+  })();
+
+  const example = `Example: For instance, applying a force to a mass causes acceleration given by F = ma, and every force has an equal and opposite reaction.`;
+
+  // Return as clear sentences (no leading numbers) so frontend renders as paragraphs
+  return `${presentedTopic}: ${definition} ${contextLine} ${example} If you want, I can expand with step-by-step derivation, worked examples, or exam-focused notes.`;
 };
 
 const buildCompareResponse = (topic, examName) => {
@@ -186,8 +230,58 @@ const generateAIResponse = async (userMessage, examName, context = '') => {
       return `1) Interpret expression: ${exprCandidate}\n2) Compute using standard operator precedence\n3) Result: ${value}`;
     }
   }
+  // Prefer Gemini/Google Generative Language API when key is configured
+  try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    const hasGeminiKey = Boolean(apiKey && apiKey !== 'YOUR_GEMINI_API_KEY');
+    if (hasGeminiKey) {
+      // Use Gemini generateContent REST endpoint
+      const systemPrompt = systemPrompts[examName] || systemPrompts.GENERAL;
+      const promptText = `${systemPrompt}\n\nContext: ${context || 'No extra context.'}\n\nUser: ${userMessage}\n\nInstructions: Answer clearly and, when helpful, present the solution as numbered steps.`;
 
-  return generateDynamicOfflineResponse(userMessage, examName, context);
+      const modelName = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+      const body = {
+        contents: [
+          {
+            parts: [{ text: promptText }]
+          }
+        ],
+        generationConfig: {
+          temperature: 0.2,
+          maxOutputTokens: 512
+        }
+      };
+
+      const resp = await axios.post(url, body, { timeout: 15000 });
+      let generated = null;
+      if (resp && resp.data) {
+        const first = resp.data.candidates && resp.data.candidates[0];
+        if (first && first.content && first.content.parts && first.content.parts.length > 0) {
+          generated = first.content.parts.map(p => p.text || '').join(' ').trim();
+        }
+      }
+
+      if (generated) {
+        setActiveProvider('gemini');
+        console.log('AI Provider: Gemini');
+        return formatAsSteps(String(generated));
+      }
+
+      // If Gemini returned no text, try fallback pipeline
+      console.log('AI Provider: Gemini returned empty response, trying fallback');
+      return generateAIResponseFallback(userMessage, examName, context);
+    }
+  } catch (err) {
+    // Log HTTP details when available to debug 4xx/5xx responses
+    if (err && err.response) {
+      console.error('Gemini API HTTP error:', err.response.status, err.response.data);
+    } else {
+      console.error('Gemini API error, falling back to alternate provider:', err && err.message ? err.message : err);
+    }
+  }
+
+  return generateAIResponseFallback(userMessage, examName, context);
 };
 
 // Fallback AI response using HuggingFace
@@ -196,23 +290,41 @@ const generateAIResponseFallback = async (userMessage, examName, context = '') =
     const useHuggingFace = process.env.USE_HUGGINGFACE === 'true';
     const hasHuggingFaceKey = Boolean(process.env.HUGGINGFACE_API_KEY && process.env.HUGGINGFACE_API_KEY !== 'YOUR_HUGGINGFACE_API_KEY');
     if (!useHuggingFace || !hasHuggingFaceKey) {
+      setActiveProvider('offline');
+      console.log('AI Provider: Offline fallback');
       return generateDynamicOfflineResponse(userMessage, examName, context);
     }
 
+    const model = process.env.HUGGINGFACE_MODEL || 'Qwen/Qwen2.5-7B-Instruct';
+    const systemPrompt = systemPrompts[examName] || systemPrompts.GENERAL;
     const response = await axios.post(
-      'https://api-inference.huggingface.co/models/meta-llama/Llama-2-7b-chat-hf',
-      { inputs: userMessage },
+      'https://router.huggingface.co/v1/chat/completions',
+      {
+        model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `${userMessage}\n\nContext: ${context || 'No extra context.'}` }
+        ],
+        max_tokens: 512,
+        temperature: 0.2
+      },
       {
         headers: {
-          Authorization: `Bearer ${process.env.HUGGINGFACE_API_KEY}`
-        }
+          Authorization: `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 20000
       }
     );
-    
-    const raw = response.data[0]?.generated_text || 'Unable to generate response. Please try again.';
+
+    const raw = response.data?.choices?.[0]?.message?.content || 'Unable to generate response. Please try again.';
+    setActiveProvider('huggingface');
+    console.log('AI Provider: HuggingFace');
     return formatAsSteps(raw);
   } catch (error) {
     console.error('HuggingFace API Error:', error);
+    setActiveProvider('offline');
+    console.log('AI Provider: Offline fallback (after HF error)');
     return generateDynamicOfflineResponse(userMessage, examName, context);
   }
 };
@@ -282,6 +394,7 @@ Format as JSON with day-by-day breakdown.`;
 module.exports = {
   generateAIResponse,
   generateAIResponseFallback,
+  getActiveProvider,
   getOfflineResponse,
   generateQuizQuestions,
   generateStudyPlan

@@ -27,13 +27,14 @@ function logout() {
 
 // API Call Function
 async function apiCall(endpoint, method = 'GET', data = null) {
-    const options = {
-        method,
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${getToken()}`
-        }
+    const headers = {
+        'Content-Type': 'application/json'
     };
+
+    const token = getToken();
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const options = { method, headers };
 
     if (data) {
         options.body = JSON.stringify(data);
