@@ -48,6 +48,10 @@ const userSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  totalStudySeconds: {
+  type: Number,
+  default: 0
+},
   dailyStudyGoal: {
     type: Number,
     default: 120, // minutes

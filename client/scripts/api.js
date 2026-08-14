@@ -19,6 +19,10 @@ function setUser(user) {
 }
 
 function logout() {
+    if (typeof window !== 'undefined' && typeof window.saveStudyTimeBeforeClose === 'function') {
+        window.saveStudyTimeBeforeClose();
+    }
+
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     // Use absolute route so server serves the correct page
