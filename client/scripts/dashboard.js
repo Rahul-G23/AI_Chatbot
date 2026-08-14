@@ -9,18 +9,251 @@ let typingIndicatorElement = null;
 let isSendingMessage = false;
 let syllabusEntries = [];
 let notesCache = [];
+let studyPlansCache = [];
+let studyTimerInterval = null;
+let studySessionStart = null;
+let savedStudySeconds = 0;
+let studyTimeSaveInProgress = false;
+let studySessionEnded = false;
 const CHAT_HISTORY_STORAGE_KEY = 'examverse_chat_history';
 
+function stopStudyTimer(resetState = true) {
+    if (studyTimerInterval) {
+        clearInterval(studyTimerInterval);
+        studyTimerInterval = null;
+    }
+
+    if (resetState) {
+        studySessionStart = null;
+        studySessionEnded = false;
+    }
+}
+
+function startStudyTimer(initialTotalSeconds = 0) {
+    stopStudyTimer(false);
+
+    savedStudySeconds = Number(initialTotalSeconds) || 0;
+    studySessionStart = Date.now();
+    studySessionEnded = false;
+
+    updateStudyTimeDisplay();
+
+    studyTimerInterval = setInterval(() => {
+        updateStudyTimeDisplay();
+    }, 1000);
+}
+
+function getCurrentSessionSeconds() {
+    if (!studySessionStart) return 0;
+
+    return Math.max(
+        0,
+        Math.floor((Date.now() - studySessionStart) / 1000)
+    );
+}
+
+function getSelectedExamName() {
+    const user = getUser();
+    return user?.targetExam || 'NEET';
+}
+
+function renderSelectedExamSyllabus(items = []) {
+    const list = document.getElementById('selectedExamSyllabusList');
+    const count = document.getElementById('selectedExamSyllabusCount');
+
+    if (!list) return;
+
+    const uniqueSubjects = Array.from(new Set((items || []).map(item => item.subject).filter(Boolean)));
+    if (count) {
+        count.textContent = `${uniqueSubjects.length || 0} subjects`;
+    }
+
+    if (!uniqueSubjects.length) {
+        list.innerHTML = '<p class="mini-subject-empty">No syllabus available.</p>';
+        return;
+    }
+
+    list.innerHTML = uniqueSubjects.slice(0, 8).map(subject => `
+        <button type="button" class="subject-overview-btn" data-subject="${escapeHtml(subject)}" aria-label="Open ${escapeHtml(subject)} syllabus">
+            ${escapeHtml(subject)}
+        </button>
+    `).join('');
+}
+
+function updateStudyStreakDisplay(streakDays = 0) {
+    const studyStreakElement = document.getElementById('studyStreak');
+    if (!studyStreakElement) return;
+
+    const safeDays = Math.max(0, Math.floor(Number(streakDays) || 0));
+    studyStreakElement.textContent = `${safeDays} day${safeDays === 1 ? '' : 's'}`;
+}
+
+function setupSelectedExamSyllabusActions() {
+    const list = document.getElementById('selectedExamSyllabusList');
+    if (!list) return;
+
+    list.addEventListener('click', (event) => {
+        const button = event.target.closest('.subject-overview-btn');
+        if (!button) return;
+
+        const selectedSubject = button.getAttribute('data-subject') || '';
+        if (!selectedSubject) return;
+
+        const examName = getSelectedExamName();
+        const examFilter = document.getElementById('examFilter');
+        const syllabusSearch = document.getElementById('syllabusSearch');
+
+        if (examFilter) {
+            examFilter.value = examName;
+        }
+
+        if (syllabusSearch) {
+            syllabusSearch.value = selectedSubject;
+        }
+
+        renderSyllabusSection();
+
+        const syllabusMenuItem = document.querySelector('.menu-item[href="#syllabus"]');
+        if (syllabusMenuItem) {
+            syllabusMenuItem.click();
+        }
+    });
+}
+
+function renderUpcomingExamCountdown(countdown) {
+    const countdownEl = document.getElementById('upcomingExamCountdown');
+    const dateEl = document.getElementById('examDateLabel');
+
+    if (!countdownEl) return;
+
+    if (!countdown) {
+        countdownEl.textContent = '—';
+        if (dateEl) dateEl.textContent = 'No upcoming exam';
+        return;
+    }
+
+    const days = Math.max(0, Number(countdown.daysRemaining) || 0);
+    const hours = Math.max(0, Number(countdown.hoursRemaining) || 0);
+    const examDate = countdown.examDate ? new Date(countdown.examDate) : null;
+
+    countdownEl.textContent = `${days} days • ${hours} hours`;
+    if (dateEl) {
+        dateEl.textContent = examDate ? `Exam: ${examDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}` : 'Exam date unavailable';
+    }
+}
+
+function getTotalStudySeconds() {
+    return savedStudySeconds + getCurrentSessionSeconds();
+}
+
+function formatStudyDuration(totalSeconds) {
+    const safeSeconds = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+    const hours = Math.floor(safeSeconds / 3600);
+    const minutes = Math.floor((safeSeconds % 3600) / 60);
+
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+function updateStudyTimeDisplay() {
+    const studyTimeElement = document.getElementById('studyTime');
+
+    if (!studyTimeElement) return;
+
+    studyTimeElement.textContent = formatStudyDuration(getTotalStudySeconds());
+}
+
+async function saveStudyTime() {
+    if (!studySessionStart || studyTimeSaveInProgress || studySessionEnded) {
+        return;
+    }
+
+    const sessionSeconds = getCurrentSessionSeconds();
+
+    if (sessionSeconds <= 0) return;
+
+    studyTimeSaveInProgress = true;
+    studySessionEnded = true;
+
+    if (studyTimerInterval) {
+        clearInterval(studyTimerInterval);
+        studyTimerInterval = null;
+    }
+
+    const token = getToken();
+
+    if (!token) {
+        studyTimeSaveInProgress = false;
+        return;
+    }
+
+    try {
+        await apiCall('/analytics/study-time', 'POST', {
+            durationSeconds: sessionSeconds
+        });
+
+        savedStudySeconds += sessionSeconds;
+        studySessionStart = null;
+
+        updateStudyTimeDisplay();
+    } catch (error) {
+        console.error('Failed to save study time:', error);
+    } finally {
+        studyTimeSaveInProgress = false;
+    }
+}
+
+function saveStudyTimeBeforeClose() {
+    if (!studySessionStart || studySessionEnded) return;
+
+    const sessionSeconds = getCurrentSessionSeconds();
+
+    if (sessionSeconds <= 0) return;
+
+    const token = getToken();
+
+    if (!token) return;
+
+    const payload = JSON.stringify({
+        durationSeconds: sessionSeconds
+    });
+
+    // Keep the request alive while the page is closing.
+    fetch('/api/analytics/study-time', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: payload,
+        keepalive: true
+    }).catch(error => {
+        console.error('Failed to save study time before close:', error);
+    });
+
+    studySessionEnded = true;
+}
+
+window.saveStudyTimeBeforeClose = saveStudyTimeBeforeClose;
 document.addEventListener('DOMContentLoaded', async () => {
     initTheme();
     setupNavigation();
     setupLogout();
+    setupSelectedExamSyllabusActions();
     await loadDashboardData();
     setupChatbot();
     await setupSyllabus();
-        setupThemeToggle();
-        setupNotes();
+    await setupStudyPlanning();
+    setupThemeToggle();
+    setupNotes();
     restoreChatHistory();
+
+    window.addEventListener('beforeunload', saveStudyTimeBeforeClose);
+    window.addEventListener('pagehide', saveStudyTimeBeforeClose);
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+            saveStudyTimeBeforeClose();
+        }
+    });
 });
 
 function initTheme() {
@@ -103,6 +336,7 @@ function setupNavigation() {
 async function setupSyllabus() {
     const examFilter = document.getElementById('examFilter');
     const syllabusSearch = document.getElementById('syllabusSearch');
+    const clearSyllabusFiltersBtn = document.getElementById('clearSyllabusFiltersBtn');
 
     if (examFilter) {
         examFilter.addEventListener('change', renderSyllabusSection);
@@ -110,6 +344,20 @@ async function setupSyllabus() {
 
     if (syllabusSearch) {
         syllabusSearch.addEventListener('input', renderSyllabusSection);
+    }
+
+    if (clearSyllabusFiltersBtn) {
+        clearSyllabusFiltersBtn.addEventListener('click', () => {
+            if (examFilter) {
+                examFilter.value = '';
+            }
+
+            if (syllabusSearch) {
+                syllabusSearch.value = '';
+            }
+
+            renderSyllabusSection();
+        });
     }
 
     try {
@@ -123,6 +371,173 @@ async function setupSyllabus() {
         syllabusEntries = [];
         renderSyllabusSection();
     }
+}
+
+async function setupStudyPlanning() {
+    const studyPlanForm = document.getElementById('studyPlanForm');
+    const studyPlanExam = document.getElementById('studyPlanExam');
+    const studyPlanTargetDate = document.getElementById('studyPlanTargetDate');
+    const studyPlanWeakSubjects = document.getElementById('studyPlanWeakSubjects');
+    const studyPlanHours = document.getElementById('studyPlanHours');
+
+    if (studyPlanExam && !studyPlanExam.value) {
+        studyPlanExam.value = getSelectedExamName();
+    }
+
+    if (studyPlanTargetDate) {
+        const defaultDate = new Date();
+        defaultDate.setDate(defaultDate.getDate() + 30);
+        studyPlanTargetDate.value = defaultDate.toISOString().split('T')[0];
+    }
+
+    if (studyPlanForm) {
+        studyPlanForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+
+            const examName = studyPlanExam?.value || getSelectedExamName();
+            const targetDate = studyPlanTargetDate?.value;
+            const weakSubjects = (studyPlanWeakSubjects?.value || '')
+                .split(',')
+                .map(item => item.trim())
+                .filter(Boolean);
+            const dailyStudyHours = Number(studyPlanHours?.value || 0);
+            const status = document.getElementById('studyPlanStatus');
+
+            if (!targetDate || !Number.isFinite(dailyStudyHours) || dailyStudyHours <= 0) {
+                if (status) status.textContent = 'Please choose a valid target date and daily study hours.';
+                return;
+            }
+
+            try {
+                if (status) status.textContent = 'Generating your study plan...';
+
+                const response = await apiCall('/studyPlan', 'POST', {
+                    examName,
+                    targetDate,
+                    weakSubjects,
+                    dailyStudyHours
+                });
+
+                if (response.success) {
+                    if (status) status.textContent = 'Study plan created successfully.';
+                    studyPlanForm.reset();
+                    if (studyPlanExam) studyPlanExam.value = examName;
+                    if (studyPlanHours) studyPlanHours.value = 4;
+                    if (studyPlanTargetDate) {
+                        const nextDate = new Date();
+                        nextDate.setDate(nextDate.getDate() + 30);
+                        studyPlanTargetDate.value = nextDate.toISOString().split('T')[0];
+                    }
+                    await loadStudyPlans();
+                }
+            } catch (error) {
+                console.error('Failed to create study plan:', error);
+                if (status) status.textContent = 'Could not create study plan. Please try again.';
+            }
+        });
+    }
+
+    await loadStudyPlans();
+}
+
+async function loadStudyPlans() {
+    const studyPlanList = document.getElementById('studyPlanList');
+    const status = document.getElementById('studyPlanStatus');
+
+    try {
+        const response = await apiCall('/studyPlan');
+        if (response.success) {
+            studyPlansCache = Array.isArray(response.studyPlans) ? response.studyPlans : [];
+            renderStudyPlans();
+            if (status) status.textContent = studyPlansCache.length ? 'Loaded your study plans.' : 'Create a plan to see your weekly targets and milestones.';
+            return;
+        }
+    } catch (error) {
+        console.error('Failed to fetch study plans:', error);
+    }
+
+    studyPlansCache = [];
+    if (studyPlanList) {
+        studyPlanList.innerHTML = '<p class="study-plan-empty">No study plans yet.</p>';
+    }
+    if (status) status.textContent = 'Could not load study plans.';
+}
+
+function renderStudyPlans() {
+    const studyPlanList = document.getElementById('studyPlanList');
+    if (!studyPlanList) return;
+
+    if (!studyPlansCache.length) {
+        studyPlanList.innerHTML = '<p class="study-plan-empty">No study plans yet.</p>';
+        return;
+    }
+
+    studyPlanList.innerHTML = studyPlansCache.map((plan, index) => {
+        const milestones = Array.isArray(plan.milestones) ? plan.milestones : [];
+        const completedMilestones = milestones.filter(milestone => milestone.completed).length;
+        const schedule = Array.isArray(plan.schedule) ? plan.schedule.slice(0, 3) : [];
+        const weakSubjects = Array.isArray(plan.weakSubjects) ? plan.weakSubjects.join(', ') : 'None';
+
+        return `
+            <article class="study-plan-item" data-plan-id="${plan._id || ''}">
+                <div class="study-plan-item-header">
+                    <h3>${escapeHtml(plan.examName || 'Study Plan')}</h3>
+                    <span class="study-plan-badge">${completedMilestones}/${milestones.length || 0} milestones</span>
+                </div>
+                <p class="study-plan-meta">Target date: ${plan.targetDate ? new Date(plan.targetDate).toLocaleDateString() : 'Not set'} · Daily hours: ${plan.dailyStudyHours ?? '-'} · Remaining days: ${plan.remainingDays ?? '-'}</p>
+                <p class="study-plan-summary"><strong>Weak subjects:</strong> ${escapeHtml(weakSubjects)}</p>
+                <p class="study-plan-schedule"><strong>Schedule preview:</strong> ${schedule.length ? schedule.map(day => `${escapeHtml(day.subject || 'Study')}${day.topics?.length ? ` (${escapeHtml(day.topics.join(', '))})` : ''}`).join(' • ') : 'No schedule available'}</p>
+                <p class="study-plan-milestones"><strong>Milestones:</strong> ${milestones.length ? milestones.map(milestone => `${escapeHtml(milestone.name || 'Milestone')}${milestone.completed ? ' ✓' : ''}`).join(' • ') : 'No milestones available'}</p>
+                <div class="study-plan-item-actions">
+                    <button type="button" class="btn study-plan-delete-btn" data-plan-id="${plan._id || ''}">Remove Plan</button>
+                    ${milestones.map((milestone, milestoneIndex) => `
+                        <button type="button" class="btn milestone-toggle-btn" data-plan-id="${plan._id || ''}" data-milestone-index="${milestoneIndex}" data-completed="${milestone.completed ? 'true' : 'false'}">
+                            ${milestone.completed ? 'Mark Incomplete' : 'Mark Complete'}
+                        </button>
+                    `).join('')}
+                </div>
+            </article>
+        `;
+    }).join('');
+
+    studyPlanList.querySelectorAll('.milestone-toggle-btn').forEach(button => {
+        button.addEventListener('click', async () => {
+            const planId = button.getAttribute('data-plan-id');
+            const milestoneIndex = button.getAttribute('data-milestone-index');
+            const isCompleted = button.getAttribute('data-completed') === 'true';
+
+            if (!planId || milestoneIndex === null) return;
+
+            try {
+                await apiCall(`/studyPlan/${planId}/milestone/${milestoneIndex}`, 'PUT', {
+                    completed: !isCompleted
+                });
+                await loadStudyPlans();
+            } catch (error) {
+                console.error('Failed to update milestone:', error);
+            }
+        });
+    });
+
+    studyPlanList.querySelectorAll('.study-plan-delete-btn').forEach(button => {
+        button.addEventListener('click', async () => {
+            const planId = button.getAttribute('data-plan-id');
+
+            if (!planId) return;
+
+            if (!confirm('Delete this study plan? This cannot be undone.')) {
+                return;
+            }
+
+            try {
+                await apiCall(`/studyPlan/${planId}`, 'DELETE');
+                await loadStudyPlans();
+            } catch (error) {
+                console.error('Failed to delete study plan:', error);
+                alert('Could not delete the study plan. Please try again.');
+            }
+        });
+    });
 }
 
 function renderSyllabusSection() {
@@ -185,18 +600,37 @@ function setupLogout() {
 async function loadDashboardData() {
     try {
         const response = await apiCall('/analytics/dashboard');
-        
+
         if (response.success) {
             const analytics = response.analytics;
-            
-            // Update stats
-            document.getElementById('streakDays').textContent = `${analytics.user.streakDays} days`;
-            document.getElementById('studyTime').textContent = `${(analytics.user.totalStudyMinutes / 60).toFixed(1)} hours`;
-            
-            // Charts removed
+            const totalSavedSeconds = Number((analytics.user.totalStudySeconds ?? (Number(analytics.user.totalStudyMinutes || 0) * 60)) || 0);
+            const streakDays = Number(analytics.user.streakDays || 0);
+
+            const selectedExamName = getSelectedExamName();
+            const selectedExam = document.getElementById('selectedExamName');
+            if (selectedExam) selectedExam.textContent = selectedExamName;
+
+            savedStudySeconds = totalSavedSeconds;
+            startStudyTimer(totalSavedSeconds);
+            updateStudyTimeDisplay();
+            updateStudyStreakDisplay(streakDays);
+
+            const syllabusResponse = await apiCall(`/syllabus?examName=${encodeURIComponent(selectedExamName)}`);
+            const syllabusItems = Array.isArray(syllabusResponse.syllabuses) ? syllabusResponse.syllabuses : [];
+            renderSelectedExamSyllabus(syllabusItems);
+
+            const countdownResponse = await apiCall(`/countdown?examName=${encodeURIComponent(selectedExamName)}`);
+            const countdown = Array.isArray(countdownResponse.countdowns) ? countdownResponse.countdowns[0] : null;
+            renderUpcomingExamCountdown(countdown || null);
         }
     } catch (error) {
         console.error('Failed to load dashboard data:', error);
+        const selectedExam = document.getElementById('selectedExamName');
+        if (selectedExam) selectedExam.textContent = getSelectedExamName();
+        renderSelectedExamSyllabus([]);
+        updateStudyStreakDisplay(0);
+        startStudyTimer(0);
+        renderUpcomingExamCountdown(null);
     }
 }
 

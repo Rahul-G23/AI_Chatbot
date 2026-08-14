@@ -19,6 +19,7 @@
                 <a href="#dashboard" class="menu-item active">📊 Dashboard</a>
                 <a href="#chatbot" class="menu-item">🤖 AI Chatbot</a>
                 <a href="#syllabus" class="menu-item">📚 Syllabus</a>
+                <a href="#studyPlan" class="menu-item">🗓️ Study Planning</a>
                 <!-- Mock Tests link removed -->
                 <a href="#notes" class="menu-item">📓 Notes</a>
                 <a href="#profile" class="menu-item">👤 Profile</a>
@@ -39,22 +40,46 @@
 
                 <div class="stats-grid">
                     <div class="stat-card">
-                        <div class="stat-icon">🔥</div>
                         <div class="stat-info">
-                            <h3>Study Streak</h3>
-                            <p id="streakDays">0 days</p>
+                            <h3>Selected Exam Syllabus</h3>
+                            <p id="selectedExamName">—</p>
+                            <small id="selectedExamSyllabusCount">0 subjects</small>
                         </div>
                     </div>
 
                     <div class="stat-card">
-                        <div class="stat-icon">⏱️</div>
+                        <div class="stat-icon">🔥</div>
                         <div class="stat-info">
-                            <h3>Study Time</h3>
-                            <p id="studyTime">0 hours</p>
+                            <h3>Study Streak</h3>
+                            <p id="studyStreak">0 days</p>
+                            <small>Keep learning daily</small>
                         </div>
                     </div>
 
-                    <!-- Quizzes Taken and Avg Score removed per request -->
+                    <div class="stat-card">
+                        <div class="stat-icon">🕒</div>
+                        <div class="stat-info">
+                            <h3>Study Hours</h3>
+                            <p id="studyTime">00:00</p>
+                            <small>Total tracked time</small>
+                        </div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-icon">⏳</div>
+                        <div class="stat-info">
+                            <h3>Upcoming Exam</h3>
+                            <p id="upcomingExamCountdown">—</p>
+                            <small id="examDateLabel">No upcoming exam</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="exam-summary-panel">
+                    <h2>Exam syllabus overview</h2>
+                    <div id="selectedExamSyllabusList" class="mini-subject-grid">
+                        <p class="mini-subject-empty">No syllabus available.</p>
+                    </div>
                 </div>
 
                 <!-- Charts removed -->
@@ -104,8 +129,62 @@
                             <option value="CLAT">CLAT</option>
                         </select>
                         <input type="text" id="syllabusSearch" placeholder="Search syllabus..." class="form-control">
+                        <button id="clearSyllabusFiltersBtn" class="btn btn-secondary" type="button">Clear Filters</button>
                     </div>
                     <div id="syllabusContent" class="content-grid"></div>
+                </div>
+            </section>
+
+            <!-- Study Planning Section -->
+            <section id="studyPlan" class="content-section" style="display: none;">
+                <h1>Study Planning</h1>
+                <div class="study-plan-container">
+                    <div class="study-plan-card">
+                        <h2>Create a Plan</h2>
+                        <form id="studyPlanForm" class="study-plan-form">
+                            <div class="form-group">
+                                <label for="studyPlanExam">Exam</label>
+                                <select id="studyPlanExam" class="form-control" required>
+                                    <option value="">Select Exam</option>
+                                    <option value="NEET">NEET</option>
+                                    <option value="JEE Main">JEE Main</option>
+                                    <option value="JEE Advanced">JEE Advanced</option>
+                                    <option value="UPSC">UPSC</option>
+                                    <option value="Banking">Banking</option>
+                                    <option value="SSC">SSC</option>
+                                    <option value="Railway">Railway</option>
+                                    <option value="CAT">CAT</option>
+                                    <option value="GATE">GATE</option>
+                                    <option value="CUET">CUET</option>
+                                    <option value="NDA">NDA</option>
+                                    <option value="CLAT">CLAT</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="studyPlanTargetDate">Target Date</label>
+                                <input type="date" id="studyPlanTargetDate" class="form-control" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="studyPlanWeakSubjects">Weak Subjects</label>
+                                <input type="text" id="studyPlanWeakSubjects" class="form-control" placeholder="Physics, Chemistry, Math">
+                            </div>
+                            <div class="form-group">
+                                <label for="studyPlanHours">Daily Study Hours</label>
+                                <input type="number" id="studyPlanHours" class="form-control" min="1" step="0.5" value="4" required>
+                            </div>
+                            <div class="study-plan-actions">
+                                <button type="submit" class="btn btn-primary">Generate Study Plan</button>
+                                <p id="studyPlanStatus" class="study-plan-status">Create a plan to see your weekly targets and milestones.</p>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="study-plan-card">
+                        <h2>Your Study Plans</h2>
+                        <div id="studyPlanList" class="study-plan-list">
+                            <p class="study-plan-empty">No study plans yet.</p>
+                        </div>
+                    </div>
                 </div>
             </section>
 

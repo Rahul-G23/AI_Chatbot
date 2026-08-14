@@ -5,6 +5,14 @@ const chatbotController = require('../controllers/chatbotController');
 const auth = require('../middleware/auth');
 const { aiLimiter } = require('../middleware/rateLimiter');
 
+router.get('/', (req, res) => {
+	res.json({
+		success: true,
+		module: 'chatbot',
+		endpoints: ['POST /message', 'GET /history', 'GET /session/:sessionId', 'POST /session', 'DELETE /session/:sessionId']
+	});
+});
+
 // Protected routes
 router.post('/message', auth, aiLimiter, chatbotController.sendMessage);
 router.get('/history', auth, chatbotController.getChatHistory);

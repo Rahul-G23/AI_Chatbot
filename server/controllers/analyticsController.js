@@ -29,7 +29,8 @@ exports.getDashboardAnalytics = async (req, res) => {
           email: user.email,
           targetExam: user.targetExam,
           streakDays: user.streakDays,
-          totalStudyMinutes: user.totalStudyMinutes
+          totalStudyMinutes: user.totalStudyMinutes,
+          totalStudySeconds: user.totalStudySeconds
         },
         stats: {
           totalQuizzes,
@@ -136,6 +137,77 @@ exports.getLeaderboard = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Failed to fetch leaderboard', error: error.message });
+  }
+};
+
+// Add study time for the authenticated user
+exports.addStudyTime = async (req, res) => {
+  try {
+    const userId = req.userId;
+    const durationSeconds = Number(req.body.durationSeconds);
+
+    if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid study duration'
+      });
+    }
+
+    // Prevent accidentally/tamperingly adding huge sessions.
+    const safeSeconds = Math.min(Math.floor(durationSeconds), 24 * 60 * 60);
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const now = new Date();
+    const today = new Date(now);
+    today.setHours(0, 0, 0, 0);
+
+    const previousStudyDate = user.lastStudyDate ? new Date(user.lastStudyDate) : null;
+    let nextStreakDays = Number(user.streakDays || 0);
+
+    if (!previousStudyDate) {
+      nextStreakDays = 1;
+    } else {
+      const previousDay = new Date(previousStudyDate);
+      previousDay.setHours(0, 0, 0, 0);
+
+      const dayDifference = Math.floor((today - previousDay) / (24 * 60 * 60 * 1000));
+
+      if (dayDifference === 1) {
+        nextStreakDays += 1;
+      } else if (dayDifference > 1) {
+        nextStreakDays = 1;
+      }
+    }
+
+    user.totalStudySeconds = Number(user.totalStudySeconds || 0) + safeSeconds;
+    user.totalStudyMinutes = Math.floor((user.totalStudySeconds || 0) / 60);
+    user.lastStudyDate = now;
+    user.streakDays = Math.max(0, nextStreakDays);
+    user.updatedAt = now;
+
+    await user.save();
+
+    res.json({
+      success: true,
+      totalStudySeconds: user.totalStudySeconds,
+      totalStudyMinutes: user.totalStudyMinutes,
+      streakDays: user.streakDays
+    });
+  } catch (error) {
+    console.error('Failed to add study time:', error);
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to save study time'
+    });
   }
 };
 

@@ -8,22 +8,49 @@ exports.createStudyPlan = async (req, res) => {
     const { examName, targetDate, weakSubjects, dailyStudyHours } = req.body;
     const userId = req.userId;
 
-    const remainingDays = Math.ceil((new Date(targetDate) - new Date()) / (1000 * 60 * 60 * 24));
+    const safeExamName = String(examName || '').trim();
+    const safeTargetDate = new Date(targetDate);
+    const safeWeakSubjects = Array.isArray(weakSubjects)
+      ? weakSubjects.map(subject => String(subject).trim()).filter(Boolean)
+      : String(weakSubjects || '')
+          .split(',')
+          .map(subject => subject.trim())
+          .filter(Boolean);
+    const safeDailyStudyHours = Number(dailyStudyHours);
+
+    if (!safeExamName) {
+      return res.status(400).json({ success: false, message: 'Exam name is required' });
+    }
+
+    if (Number.isNaN(safeTargetDate.getTime())) {
+      return res.status(400).json({ success: false, message: 'Target date is required' });
+    }
+
+    if (!Number.isFinite(safeDailyStudyHours) || safeDailyStudyHours <= 0) {
+      return res.status(400).json({ success: false, message: 'Daily study hours must be greater than 0' });
+    }
+
+    const remainingDays = Math.ceil((safeTargetDate - new Date()) / (1000 * 60 * 60 * 24));
 
     if (remainingDays < 0) {
       return res.status(400).json({ success: false, message: 'Target date must be in the future' });
     }
 
-    // Generate AI plan
-    const aiGeneratedPlan = await generateStudyPlan(examName, remainingDays, weakSubjects, dailyStudyHours);
+    let aiGeneratedPlan = null;
+    try {
+      // Generate AI plan, but continue with a structured fallback if the provider is unavailable.
+      aiGeneratedPlan = await generateStudyPlan(safeExamName, remainingDays, safeWeakSubjects, safeDailyStudyHours);
+    } catch (generationError) {
+      console.warn('Study plan generation failed, using fallback schedule:', generationError.message);
+    }
 
     const studyPlan = new StudyPlan({
       userId,
-      examName,
-      targetDate,
+      examName: safeExamName,
+      targetDate: safeTargetDate,
       remainingDays,
-      dailyStudyHours,
-      weakSubjects,
+      dailyStudyHours: safeDailyStudyHours,
+      weakSubjects: safeWeakSubjects,
       isAIGenerated: true
     });
 
@@ -40,6 +67,9 @@ exports.createStudyPlan = async (req, res) => {
 
     // Create default milestones if not from AI
     if (!studyPlan.milestones || studyPlan.milestones.length === 0) {
+      const finalReviewDate = new Date(safeTargetDate);
+      finalReviewDate.setDate(finalReviewDate.getDate() - 15);
+
       studyPlan.milestones = [
         {
           name: 'First Month Target',
@@ -51,7 +81,7 @@ exports.createStudyPlan = async (req, res) => {
         },
         {
           name: 'Final Tests',
-          targetDate: new Date(targetDate - 15 * 24 * 60 * 60 * 1000)
+          targetDate: finalReviewDate
         }
       ];
     }
@@ -139,6 +169,27 @@ exports.updateMilestone = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Failed to update milestone', error: error.message });
+  }
+};
+
+// Delete study plan
+exports.deleteStudyPlan = async (req, res) => {
+  try {
+    const { planId } = req.params;
+    const userId = req.userId;
+
+    const deletedPlan = await StudyPlan.findOneAndDelete({ _id: planId, userId });
+
+    if (!deletedPlan) {
+      return res.status(404).json({ success: false, message: 'Study plan not found' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Study plan deleted successfully'
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to delete study plan', error: error.message });
   }
 };
 

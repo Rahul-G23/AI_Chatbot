@@ -9,5 +9,6 @@ router.post('/', auth, studyPlanController.createStudyPlan);
 router.get('/', auth, studyPlanController.getUserStudyPlan);
 router.get('/:planId', auth, studyPlanController.getStudyPlanDetails);
 router.put('/:planId/milestone/:milestoneIndex', auth, studyPlanController.updateMilestone);
+router.delete('/:planId', auth, studyPlanController.deleteStudyPlan);
 
 module.exports = router;

@@ -65,6 +65,22 @@ app.post('/api/chat', auth, aiLimiter, chatbotController.sendMessage);
 // Unauthenticated test endpoint for debugging
 app.post('/api/test-chat', chatbotController.sendMessage);
 
+// API utility endpoints used by docs and health scripts
+app.get('/api/health', (req, res) => {
+	res.json({ status: 'OK', message: 'ExamVerse AI Backend is running' });
+});
+
+app.get('/api', (req, res) => {
+	res.json({ success: true, message: 'ExamVerse AI API', health: '/api/health' });
+});
+
+// Backward-compatible alias for clients using kebab-case route naming.
+try {
+	app.use('/api/study-plan', require(path.join(routesDir, 'studyPlan.js')));
+} catch (err) {
+	console.warn('Failed to mount /api/study-plan alias:', err.message);
+}
+
 // Fallback: try to serve the requested file from client folder, otherwise
 // return 404 for API routes or send index.html for frontend routes (SPA-friendly)
 app.use((req, res) => {
